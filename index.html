@@ -80,6 +80,11 @@
         .float-diff .animate { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 800; font-size: 1.2rem; animation: floatUp 2s ease forwards; pointer-events: none; }
         @keyframes floatUp { 0% { opacity: 1; top: -10px; } 100% { opacity: 0; top: -50px; } }
 
+        #desc-suggestions { position: fixed; left: 16px; right: 16px; background: white; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 -4px 20px rgba(0,0,0,0.15); z-index: 500; overflow: hidden; display: none; }
+        #desc-suggestions .sug-item { padding: 14px 16px; border-bottom: 1px solid #f1f5f9; font-size: 0.95rem; color: var(--text); cursor: pointer; }
+        #desc-suggestions .sug-item:last-child { border-bottom: none; }
+        #desc-suggestions .sug-item:active { background: #f1f5f9; }
+
         /* LOADING OVERLAY */
         #loadingOverlay { position: fixed; inset: 0; background: rgba(27, 38, 59, 0.9); z-index: 4000; display: none; flex-direction: column; justify-content: center; align-items: center; }
         #loadingOverlay .loader { display: block; width: 50px; height: 50px; border: 5px solid rgba(33, 245, 255, 0.2); border-top: 5px solid var(--accent); }
@@ -139,8 +144,8 @@
             <div class="interactive-card">
                 <h3 style="margin-top:0; font-size:0.8rem; color:var(--text-secondary); text-transform:uppercase; margin-bottom:15px;">Add Transaction</h3>
                 <input type="date" id="addDateInput">
-                <input type="text" id="addDescInput" placeholder="Description" list="desc-list" autocomplete="off">
-                <datalist id="desc-list"></datalist>
+                <input type="text" id="addDescInput" placeholder="Description" autocomplete="off">
+                <div id="desc-suggestions"></div>
                 <div style="display: flex; gap: 10px;">
                     <input type="number" id="addAmountInput" placeholder="0.00" step="0.01" style="flex:1;">
                     <select id="addCategoryInput" style="flex:1;"></select>
@@ -312,6 +317,29 @@
         }
         initCategorySelects();
 
+        // Custom autocomplete — positions above keyboard using visualViewport
+        (function() {
+            const inp = document.getElementById('addDescInput');
+            const sug = document.getElementById('desc-suggestions');
+            function positionAboveKeyboard() {
+                const vv = window.visualViewport;
+                const kbHeight = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+                sug.style.bottom = (kbHeight + 8) + 'px';
+            }
+            inp.addEventListener('input', function() {
+                const q = this.value.trim().toLowerCase();
+                if (!q) { sug.style.display = 'none'; return; }
+                const matches = (window._allDescs || []).filter(d => d.toLowerCase().includes(q)).slice(0, 5);
+                if (!matches.length) { sug.style.display = 'none'; return; }
+                window._currentSuggestions = matches;
+                sug.innerHTML = matches.map((d, i) => `<div class="sug-item" onmousedown="event.preventDefault(); document.getElementById('addDescInput').value=window._currentSuggestions[${i}]; document.getElementById('desc-suggestions').style.display='none';">${d.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`).join('');
+                positionAboveKeyboard();
+                sug.style.display = 'block';
+            });
+            inp.addEventListener('blur', function() { setTimeout(() => sug.style.display = 'none', 150); });
+            if (window.visualViewport) window.visualViewport.addEventListener('resize', () => { if (sug.style.display !== 'none') positionAboveKeyboard(); });
+        })();
+
         auth.onAuthStateChanged(user => {
             if (user) { currentUser = user; document.getElementById('login-screen').style.display='none'; document.getElementById('app-content').style.display='flex'; resetDateInputs(); loadData(); }
             else { document.getElementById('login-screen').style.display='flex'; document.getElementById('app-content').style.display='none'; }
@@ -351,6 +379,8 @@
             });
 
             db.collection('users').doc(currentUser.uid).collection('transactions').onSnapshot(snap => {
+                // Guard: never overwrite real in-memory data with a stale empty cache result
+                if (snap.metadata.fromCache && snap.docs.length === 0 && appData.transactions.length > 0) return;
                 appData.transactions = snap.docs.map(doc => doc.data());
                 updateDescAutocomplete();
                 refreshUI(false);
@@ -363,8 +393,7 @@
         }
 
         function updateDescAutocomplete() {
-            const uniqueDescs = [...new Set(appData.transactions.map(t => t.desc))];
-            document.getElementById('desc-list').innerHTML = uniqueDescs.map(d => `<option value="${d}">`).join('');
+            window._allDescs = [...new Set(appData.transactions.map(t => t.desc))];
         }
 
         // --- SMART CSV BATCH IMPORTER ---
@@ -717,11 +746,11 @@
         function saveNetWorthSnapshot() { const date = document.getElementById('nwSnapshotDate').value, totalA = appData.netWorth.current.assets.reduce((s,i)=>s+i.amount,0), totalL = appData.netWorth.current.liabilities.reduce((s,i)=>s+i.amount,0); const snapshot = { date, total: totalA - totalL, assets: [...appData.netWorth.current.assets], liabilities: [...appData.netWorth.current.liabilities] }; appData.netWorth.history = appData.netWorth.history.filter(h => h.date !== date); appData.netWorth.history.push(snapshot); saveConfig(); showSuccess(); refreshUI(true); }
         function viewSnapshot(idx) { selectedSnapshotIdx = idx; const s = appData.netWorth.history[idx]; document.getElementById('nwReviewTitle').innerText = "Snapshot: " + s.date; let html = '<strong>Total: $' + s.total.toLocaleString() + '</strong><hr>'; s.assets.forEach(a => html += `<div class="history-row"><span>${a.name}</span><span>$${a.amount.toLocaleString()}</span></div>`); s.liabilities.forEach(l => html += `<div class="history-row"><span>${l.name}</span><span style="color:var(--red)">-$${l.amount.toLocaleString()}</span></div>`); document.getElementById('nwReviewContent').innerHTML = html; document.getElementById('nwReviewModal').style.display='flex'; }
         function applyToBudgetRule() { const today = new Date().toISOString().split('T')[0]; if(confirm("Update budget rule to $"+window.calculatedWeeklyBudget.toFixed(2)+"?")) { appData.budgetRules = appData.budgetRules.filter(r => r.effectiveDate !== today); appData.budgetRules.push({effectiveDate:today, amount:window.calculatedWeeklyBudget}); saveConfig(); refreshUI(true); } }
-        function switchTab(v, btn) { document.querySelectorAll('.view-container').forEach(e=>e.classList.remove('active')); document.getElementById('view-'+v).classList.add('active'); document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active')); btn.classList.add('active'); if(v==='tracker') refreshUI(); }
+        function switchTab(v, btn) { document.querySelectorAll('.view-container').forEach(e=>e.classList.remove('active')); document.getElementById('view-'+v).classList.add('active'); document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active')); btn.classList.add('active'); if(v==='tracker'){ renderTrackerTab(); renderSpendingChart(); renderAnnualChart(); } else if(v==='fixed') renderFixedTab(); else if(v==='networth') renderNetWorthTab(); else if(v==='history') renderFullHistory(); else if(v==='settings') renderSettings(); }
         function showSuccess() { const o = document.getElementById('successOverlay'); o.style.display='flex'; setTimeout(()=>o.style.display='none', 800); }
         function showFloatingDiff(amt, emoji) { const disp = formatTransactionDisplay(amt, emoji); const el = document.createElement('div'); el.className='float-diff animate'; el.style.color=disp.isPos ? '#10b981':'#ef4444'; el.innerText=(disp.isPos?'+':'-')+'$'+Math.abs(amt).toFixed(2); document.getElementById('floatDiff').appendChild(el); setTimeout(()=>el.remove(), 2000); }
         function animateValue(obj, start, end, duration) { let startTimestamp = null; const step = (timestamp) => { if (!startTimestamp) startTimestamp = timestamp; const progress = Math.min((timestamp - startTimestamp) / duration, 1); obj.innerHTML = `$${(start + (end - start) * (1 - Math.pow(1 - progress, 4))).toFixed(2)}`; if (progress < 1) window.requestAnimationFrame(step); else obj.innerHTML = `$${end.toFixed(2)}`; }; window.requestAnimationFrame(step); }
-        function changeViewWeek(o) { viewDate.setDate(viewDate.getDate()+(o*7)); renderTrackerTab(); }
+        function changeViewWeek(o) { viewDate.setDate(viewDate.getDate()+(o*7)); renderTrackerTab(true); }
         function changeChartMonth(o) { chartDate.setMonth(chartDate.getMonth()+o); renderSpendingChart(); }
         function changeAnnualYear(o) { annualChartDate.setFullYear(annualChartDate.getFullYear()+o); renderAnnualChart(); }
         function updateStartDate() { appData.startDate = document.getElementById('settingStartDate').value; saveConfig(); refreshUI(true); }
