@@ -317,14 +317,18 @@
         });
 
         function resetDateInputs() { const today = new Date(); document.getElementById('addDateInput').valueAsDate = today; document.getElementById('nwSnapshotDate').valueAsDate = today; document.getElementById('ruleDateInput').valueAsDate = today; }
+        auth.getRedirectResult().catch(function(error) {
+            if (error.message) {
+                document.getElementById('loginLoader').style.display = 'none';
+                document.querySelector('.login-btn').style.display = '';
+                alert("Sign-in failed: " + error.message);
+            }
+        });
+
         window.loginWithGoogle = function() {
-            auth.signInWithPopup(provider).catch(function(error) {
-                if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
-                    auth.signInWithRedirect(provider);
-                } else {
-                    alert("Sign-in failed: " + error.message);
-                }
-            });
+            document.querySelector('.login-btn').style.display = 'none';
+            document.getElementById('loginLoader').style.display = 'block';
+            auth.signInWithRedirect(provider);
         };
         window.logout = function() { auth.signOut(); location.reload(); };
 
