@@ -72,6 +72,14 @@
         .loader { border: 4px solid rgba(255,255,255,0.3); border-top: 4px solid white; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; display: none; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+        .split-stat { flex: 1; text-align: center; }
+        .split-val { font-size: 1.5rem; font-weight: 800; color: white; }
+        .split-lbl { font-size: 0.65rem; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+        .balance-context { font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-top: 5px; }
+        .float-diff { position: relative; height: 0; }
+        .float-diff .animate { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 800; font-size: 1.2rem; animation: floatUp 2s ease forwards; pointer-events: none; }
+        @keyframes floatUp { 0% { opacity: 1; top: -10px; } 100% { opacity: 0; top: -50px; } }
+
         /* LOADING OVERLAY */
         #loadingOverlay { position: fixed; inset: 0; background: rgba(27, 38, 59, 0.9); z-index: 4000; display: none; flex-direction: column; justify-content: center; align-items: center; }
         #loadingOverlay .loader { display: block; width: 50px; height: 50px; border: 5px solid rgba(33, 245, 255, 0.2); border-top: 5px solid var(--accent); }
@@ -294,6 +302,8 @@
             {name: "Credit Card Rewards", icon: "💳", color: "#34d399", isIncome: true}, {name: "Transfer", icon: "🔄", color: "#888888"}
         ];
 
+        const categoryColors = categories.reduce((m, c) => ({...m, [c.icon]: c.color}), {});
+
         function initCategorySelects() {
             const opts = categories.map(c => `<option value="${c.icon}">${c.icon} ${c.name}</option>`).join('');
             document.getElementById('addCategoryInput').innerHTML = opts; document.getElementById('editCategory').innerHTML = opts;
@@ -307,8 +317,16 @@
         });
 
         function resetDateInputs() { const today = new Date(); document.getElementById('addDateInput').valueAsDate = today; document.getElementById('nwSnapshotDate').valueAsDate = today; document.getElementById('ruleDateInput').valueAsDate = today; }
-        function loginWithGoogle() { auth.signInWithPopup(provider); }
-        function logout() { auth.signOut(); location.reload(); }
+        window.loginWithGoogle = function() {
+            auth.signInWithPopup(provider).catch(function(error) {
+                if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+                    auth.signInWithRedirect(provider);
+                } else {
+                    alert("Sign-in failed: " + error.message);
+                }
+            });
+        };
+        window.logout = function() { auth.signOut(); location.reload(); };
 
         // --- SUBCOLLECTION DB LOGIC ---
         function loadData() {
