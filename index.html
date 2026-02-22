@@ -327,21 +327,12 @@
             console.error('[Auth]', msg);
         }
 
-        auth.getRedirectResult().then(function(result) {
-            if (!result || !result.user) {
-                // No redirect in progress — normal page load, do nothing
-                console.log('[Auth] No pending redirect result');
-            }
-        }).catch(function(error) {
-            showLoginError('Sign-in error (' + error.code + '): ' + error.message);
-        });
-
         window.loginWithGoogle = function() {
             document.querySelector('.login-btn').style.display = 'none';
             document.getElementById('loginLoader').style.display = 'block';
             document.getElementById('loginError').style.display = 'none';
-            auth.signInWithRedirect(provider).catch(function(error) {
-                showLoginError('Could not start sign-in (' + error.code + '): ' + error.message);
+            auth.signInWithPopup(provider).catch(function(error) {
+                showLoginError('Sign-in error (' + error.code + '): ' + error.message);
             });
         };
         window.logout = function() { auth.signOut(); location.reload(); };
