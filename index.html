@@ -103,6 +103,7 @@
         <h1 style="color:white; margin-bottom:10px;">My Budget</h1>
         <div class="loader" id="loginLoader"></div>
         <button class="login-btn" onclick="loginWithGoogle()">Sign in with Google</button>
+        <p id="loginError" style="color:#ef4444; font-size:13px; margin-top:16px; max-width:280px; text-align:center; display:none;"></p>
     </div>
 
     <div id="app-content">
@@ -317,18 +318,31 @@
         });
 
         function resetDateInputs() { const today = new Date(); document.getElementById('addDateInput').valueAsDate = today; document.getElementById('nwSnapshotDate').valueAsDate = today; document.getElementById('ruleDateInput').valueAsDate = today; }
-        auth.getRedirectResult().catch(function(error) {
-            if (error.message) {
-                document.getElementById('loginLoader').style.display = 'none';
-                document.querySelector('.login-btn').style.display = '';
-                alert("Sign-in failed: " + error.message);
+        function showLoginError(msg) {
+            document.getElementById('loginLoader').style.display = 'none';
+            document.querySelector('.login-btn').style.display = '';
+            const el = document.getElementById('loginError');
+            el.textContent = msg;
+            el.style.display = 'block';
+            console.error('[Auth]', msg);
+        }
+
+        auth.getRedirectResult().then(function(result) {
+            if (!result || !result.user) {
+                // No redirect in progress — normal page load, do nothing
+                console.log('[Auth] No pending redirect result');
             }
+        }).catch(function(error) {
+            showLoginError('Sign-in error (' + error.code + '): ' + error.message);
         });
 
         window.loginWithGoogle = function() {
             document.querySelector('.login-btn').style.display = 'none';
             document.getElementById('loginLoader').style.display = 'block';
-            auth.signInWithRedirect(provider);
+            document.getElementById('loginError').style.display = 'none';
+            auth.signInWithRedirect(provider).catch(function(error) {
+                showLoginError('Could not start sign-in (' + error.code + '): ' + error.message);
+            });
         };
         window.logout = function() { auth.signOut(); location.reload(); };
 
