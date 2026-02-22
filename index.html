@@ -549,7 +549,7 @@
 
             let totalSpent = 0, totalIncome = 0;
             appData.transactions.forEach(t => {
-                if(new Date(t.date+"T12:00:00") <= range.end) {
+                if(t.date >= appData.startDate && new Date(t.date+"T12:00:00") <= range.end) {
                     const cat = categories.find(c => c.icon === t.emoji);
                     if(cat && cat.isIncome) totalIncome += t.amount; else totalSpent += t.amount;
                 }
