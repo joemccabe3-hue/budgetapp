@@ -506,15 +506,15 @@
             return { start: sun, end: sat };
         }
 
-        function refreshUI(animate = false) {
+        function renderTrackerTab(animate = false) {
             const range = getWeekRange(viewDate);
-            let earned = 0, loop = new Date(appData.startDate);
+            let earned = 0, loop = new Date(appData.startDate+"T12:00:00");
             while(loop <= range.end) {
                 const rules = [...appData.budgetRules].sort((a,b)=>new Date(b.effectiveDate)-new Date(a.effectiveDate));
                 const rule = rules.find(r => loop.toISOString().split('T')[0] >= r.effectiveDate) || rules[rules.length-1];
                 earned += rule ? rule.amount : 0; loop.setDate(loop.getDate()+7);
             }
-            
+
             const weekTrans = appData.transactions.filter(t => { const d = new Date(t.date+"T12:00:00"); return d >= range.start && d <= range.end; });
             weekTrans.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
 
@@ -533,7 +533,7 @@
 
             document.getElementById('viewWeekLabel').innerText = `${range.start.toLocaleDateString('en-US', {month:'short', day:'numeric'})} - ${range.end.toLocaleDateString('en-US', {month:'short', day:'numeric'})}`;
             document.getElementById('balanceContextLabel').innerText = `As of end of ${range.end.toLocaleDateString()}`;
-            
+
             const currentRule = [...appData.budgetRules].sort((a,b)=>new Date(b.effectiveDate)-new Date(a.effectiveDate)).find(r => range.start.toISOString().split('T')[0] >= r.effectiveDate) || appData.budgetRules[appData.budgetRules.length-1];
             document.getElementById('thisWeekBudget').innerText = `$${currentRule.amount.toFixed(2)}`;
             const weekSpentVal = weekTrans.reduce((s,t) => categories.find(c => c.icon === t.emoji)?.isIncome ? s : s + t.amount, 0);
@@ -544,7 +544,10 @@
                 const displayObj = formatTransactionDisplay(t.amount, t.emoji);
                 list.innerHTML += `<div class="transaction-item" onclick="openEditModal(${t.id})"> <div style="display:flex; align-items:center;"> <div class="t-emoji">${t.emoji}</div> <div><div style="font-weight:600;">${t.desc}</div><div style="font-size:0.7rem; color:var(--text-secondary);">${t.date}</div></div> </div> ${displayObj.html} </div>`;
             });
-            
+        }
+
+        function refreshUI(animate = false) {
+            renderTrackerTab(animate);
             renderSpendingChart(); renderAnnualChart(); renderFixedTab(); renderFullHistory(); renderNetWorthTab(); renderSettings();
         }
 
@@ -718,13 +721,13 @@
         function showSuccess() { const o = document.getElementById('successOverlay'); o.style.display='flex'; setTimeout(()=>o.style.display='none', 800); }
         function showFloatingDiff(amt, emoji) { const disp = formatTransactionDisplay(amt, emoji); const el = document.createElement('div'); el.className='float-diff animate'; el.style.color=disp.isPos ? '#10b981':'#ef4444'; el.innerText=(disp.isPos?'+':'-')+'$'+Math.abs(amt).toFixed(2); document.getElementById('floatDiff').appendChild(el); setTimeout(()=>el.remove(), 2000); }
         function animateValue(obj, start, end, duration) { let startTimestamp = null; const step = (timestamp) => { if (!startTimestamp) startTimestamp = timestamp; const progress = Math.min((timestamp - startTimestamp) / duration, 1); obj.innerHTML = `$${(start + (end - start) * (1 - Math.pow(1 - progress, 4))).toFixed(2)}`; if (progress < 1) window.requestAnimationFrame(step); else obj.innerHTML = `$${end.toFixed(2)}`; }; window.requestAnimationFrame(step); }
-        function changeViewWeek(o) { viewDate.setDate(viewDate.getDate()+(o*7)); refreshUI(true); }
+        function changeViewWeek(o) { viewDate.setDate(viewDate.getDate()+(o*7)); renderTrackerTab(); }
         function changeChartMonth(o) { chartDate.setMonth(chartDate.getMonth()+o); renderSpendingChart(); }
         function changeAnnualYear(o) { annualChartDate.setFullYear(annualChartDate.getFullYear()+o); renderAnnualChart(); }
         function updateStartDate() { appData.startDate = document.getElementById('settingStartDate').value; saveConfig(); refreshUI(true); }
         function addBudgetRule() { const date = document.getElementById('ruleDateInput').value, amount = parseFloat(document.getElementById('ruleAmountInput').value); if(!date || isNaN(amount)) return; appData.budgetRules.push({effectiveDate:date, amount}); saveConfig(); document.getElementById('ruleAmountInput').value = ''; refreshUI(true); }
         function sortList(type, criteria) { const targets = appData.fixedItems.filter(i=>i.type===type); const others = appData.fixedItems.filter(i=>i.type!==type); targets.sort((a,b) => criteria==='alpha' ? a.name.localeCompare(b.name) : b.amount-a.amount); appData.fixedItems = type==='income' ? [...targets, ...others] : [...others, ...targets]; saveConfig(); refreshUI(true); }
-        function jumpToDate(val) { viewDate = new Date(val); refreshUI(true); }
+        function jumpToDate(val) { viewDate = new Date(val+"T12:00:00"); renderTrackerTab(); }
 
     } catch (error) { alert("CRITICAL APP ERROR: " + error.message); }
 </script>
