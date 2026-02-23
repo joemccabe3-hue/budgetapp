@@ -297,7 +297,7 @@
         const db = firebase.firestore(), auth = firebase.auth(), provider = new firebase.auth.GoogleAuthProvider();
 
         let currentUser = null, appData = { transactions: [], startDate: "2026-01-01", budgetRules: [{ effectiveDate: "2026-01-01", amount: 540.66 }], fixedItems: [], netWorth: { current: { assets:[], liabilities:[] }, history: [] } };
-        let viewDate = new Date(), chartDate = new Date(), annualChartDate = new Date(), chartInst = null, annualInst = null, nwInst = null, selectedSnapshotIdx = null, pendingAction = null;
+        let viewDate = new Date(), chartDate = new Date(), annualChartDate = new Date(), chartInst = null, annualInst = null, nwInst = null, selectedSnapshotIdx = null, pendingAction = null, _pendingAnimate = false;
 
         const categories = [
             {name: "Groceries", icon: "🛒", color: "#3B82F6"}, {name: "Dining", icon: "🍔", color: "#60A5FA"}, {name: "Coffee", icon: "☕", color: "#93C5FD"},
@@ -384,7 +384,8 @@
                 if (snap.metadata.fromCache && snap.docs.length === 0 && appData.transactions.length > 0) return;
                 appData.transactions = snap.docs.map(doc => doc.data());
                 updateDescAutocomplete();
-                refreshUI(false);
+                const shouldAnimate = _pendingAnimate; _pendingAnimate = false;
+                refreshUI(shouldAnimate);
             });
         }
 
@@ -577,8 +578,13 @@
         }
 
         function refreshUI(animate = false) {
+            const activeId = document.querySelector('.view-container.active')?.id || 'view-tracker';
             renderTrackerTab(animate);
-            renderSpendingChart(); renderAnnualChart(); renderFixedTab(); renderFullHistory(); renderNetWorthTab(); renderSettings();
+            if(activeId === 'view-tracker') { renderSpendingChart(); renderAnnualChart(); }
+            else if(activeId === 'view-fixed') renderFixedTab();
+            else if(activeId === 'view-networth') renderNetWorthTab();
+            else if(activeId === 'view-history') renderFullHistory();
+            else if(activeId === 'view-settings') renderSettings();
         }
 
         function formatTransactionDisplay(amount, emoji) {
@@ -678,7 +684,7 @@
         };
 
         function renderFullHistory() {
-            const container = document.getElementById('historyListContainer'); container.innerHTML = '';
+            const container = document.getElementById('historyListContainer');
             const search = document.getElementById('historySearch').value.toLowerCase(), catFilter = document.getElementById('historyCategoryFilter').value;
             const start = document.getElementById('histStart').value, end = document.getElementById('histEnd').value;
             let filtered = appData.transactions.filter(t => {
@@ -690,13 +696,14 @@
             document.getElementById('historyTotalDisplay').innerText = (sum>=0?'+':'-') + '$' + Math.abs(sum).toFixed(2);
             document.getElementById('historyTotalDisplay').style.color = sum>=0 ? 'var(--green)' : 'var(--red)';
             filtered.sort((a,b)=>new Date(b.date)-new Date(a.date));
-            let lastH = '';
+            let lastH = '', html = '';
             filtered.forEach(t => {
                 const range = getWeekRange(new Date(t.date+"T12:00:00")), header = `Week of ${range.start.toLocaleDateString()}`;
-                if(header !== lastH) { container.innerHTML += `<div class="week-header">${header}</div>`; lastH = header; }
+                if(header !== lastH) { html += `<div class="week-header">${header}</div>`; lastH = header; }
                 const disp = formatTransactionDisplay(t.amount, t.emoji);
-                container.innerHTML += `<div class="transaction-item" onclick="openEditModal(${t.id})"> <div style="display:flex; align-items:center;"> <div class="t-emoji">${t.emoji}</div> <div style="flex:1; margin-right:10px;"><div onclick="event.stopPropagation(); makeEditable(${t.id}, 'desc', '${t.desc.replace(/'/g, "\\'")}', this)">${t.desc}</div><div style="font-size:0.7rem; color:var(--text-secondary);">${t.date}</div></div> </div> <div style="font-weight:700; color:${disp.color};" onclick="event.stopPropagation(); makeEditable(${t.id}, 'amount', ${t.amount}, this)">${disp.sign}$${Math.abs(t.amount).toFixed(2)}</div> </div>`;
+                html += `<div class="transaction-item" onclick="openEditModal(${t.id})"> <div style="display:flex; align-items:center;"> <div class="t-emoji">${t.emoji}</div> <div style="flex:1; margin-right:10px;"><div onclick="event.stopPropagation(); makeEditable(${t.id}, 'desc', '${t.desc.replace(/'/g, "\\'")}', this)">${t.desc}</div><div style="font-size:0.7rem; color:var(--text-secondary);">${t.date}</div></div> </div> <div style="font-weight:700; color:${disp.color};" onclick="event.stopPropagation(); makeEditable(${t.id}, 'amount', ${t.amount}, this)">${disp.sign}$${Math.abs(t.amount).toFixed(2)}</div> </div>`;
             });
+            container.innerHTML = html;
         }
 
         window.clearHistoryFilters = function() { document.getElementById('historySearch').value = ''; document.getElementById('historyCategoryFilter').value = 'ALL'; document.getElementById('histStart').value = ''; document.getElementById('histEnd').value = ''; renderFullHistory(); }
@@ -713,8 +720,9 @@
         function addTransaction() {
             const t = { id: Date.now()+Math.random(), date: document.getElementById('addDateInput').value, desc: document.getElementById('addDescInput').value, amount: parseFloat(document.getElementById('addAmountInput').value), emoji: document.getElementById('addCategoryInput').value };
             if(!t.date || isNaN(t.amount)) return;
+            _pendingAnimate = true;
             db.collection('users').doc(currentUser.uid).collection('transactions').doc(t.id.toString()).set(t);
-            showSuccess(); showFloatingDiff(t.amount, t.emoji); 
+            showSuccess(); setTimeout(() => showFloatingDiff(t.amount, t.emoji), 450);
             document.getElementById('addAmountInput').value = ''; document.getElementById('addDescInput').value = ''; document.getElementById('addDateInput').valueAsDate = new Date();
         }
 
@@ -748,7 +756,7 @@
         function viewSnapshot(idx) { selectedSnapshotIdx = idx; const s = appData.netWorth.history[idx]; document.getElementById('nwReviewTitle').innerText = "Snapshot: " + s.date; let html = '<strong>Total: $' + s.total.toLocaleString() + '</strong><hr>'; s.assets.forEach(a => html += `<div class="history-row"><span>${a.name}</span><span>$${a.amount.toLocaleString()}</span></div>`); s.liabilities.forEach(l => html += `<div class="history-row"><span>${l.name}</span><span style="color:var(--red)">-$${l.amount.toLocaleString()}</span></div>`); document.getElementById('nwReviewContent').innerHTML = html; document.getElementById('nwReviewModal').style.display='flex'; }
         function applyToBudgetRule() { const today = new Date().toISOString().split('T')[0]; if(confirm("Update budget rule to $"+window.calculatedWeeklyBudget.toFixed(2)+"?")) { appData.budgetRules = appData.budgetRules.filter(r => r.effectiveDate !== today); appData.budgetRules.push({effectiveDate:today, amount:window.calculatedWeeklyBudget}); saveConfig(); refreshUI(true); } }
         function switchTab(v, btn) { document.querySelectorAll('.view-container').forEach(e=>e.classList.remove('active')); document.getElementById('view-'+v).classList.add('active'); document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active')); btn.classList.add('active'); if(v==='tracker'){ renderTrackerTab(); renderSpendingChart(); renderAnnualChart(); } else if(v==='fixed') renderFixedTab(); else if(v==='networth') renderNetWorthTab(); else if(v==='history') renderFullHistory(); else if(v==='settings') renderSettings(); }
-        function showSuccess() { const o = document.getElementById('successOverlay'); o.style.display='flex'; setTimeout(()=>o.style.display='none', 800); }
+        function showSuccess() { const o = document.getElementById('successOverlay'); o.style.display='flex'; setTimeout(()=>o.style.display='none', 400); }
         function showFloatingDiff(amt, emoji) { const disp = formatTransactionDisplay(amt, emoji); const el = document.createElement('div'); el.className='animate'; el.style.color=disp.isPos ? '#10b981':'#ef4444'; el.innerText=(disp.isPos?'+':'-')+'$'+Math.abs(amt).toFixed(2); document.getElementById('floatDiff').appendChild(el); setTimeout(()=>el.remove(), 2000); }
         function animateValue(obj, start, end, duration) { let startTimestamp = null; const step = (timestamp) => { if (!startTimestamp) startTimestamp = timestamp; const progress = Math.min((timestamp - startTimestamp) / duration, 1); obj.innerHTML = `$${(start + (end - start) * (1 - Math.pow(1 - progress, 4))).toFixed(2)}`; if (progress < 1) window.requestAnimationFrame(step); else obj.innerHTML = `$${end.toFixed(2)}`; }; window.requestAnimationFrame(step); }
         function changeViewWeek(o) { viewDate.setDate(viewDate.getDate()+(o*7)); renderTrackerTab(true); }
