@@ -1,0 +1,9 @@
+# Local environment files (not used by this static app, but suppresses tooling warnings)
+.env
+.env.*
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp
