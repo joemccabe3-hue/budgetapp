@@ -282,7 +282,7 @@
         const db = firebase.firestore(), auth = firebase.auth(), provider = new firebase.auth.GoogleAuthProvider();
 
         let currentUser = null, appData = { transactions: [], startDate: "2026-01-01", budgetRules: [{ effectiveDate: "2026-01-01", amount: 540.66 }], fixedItems: [], netWorth: { current: { assets:[], liabilities:[] }, history: [] } };
-        let viewDate = new Date(), chartDate = new Date(), annualChartDate = new Date(), chartInst = null, annualInst = null, nwInst = null, selectedSnapshotIdx = null, pendingAction = null;
+        let viewDate = new Date(), chartDate = new Date(), annualChartDate = new Date(), chartInst = null, annualInst = null, nwInst = null, selectedSnapshotIdx = null, pendingAction = null, unsubTransactions = null;
 
         const categories = [
             {name: "Groceries", icon: "🛒", color: "#3B82F6"}, {name: "Dining", icon: "🍔", color: "#60A5FA"}, {name: "Coffee", icon: "☕", color: "#93C5FD"},
@@ -312,27 +312,31 @@
 
         // --- SUBCOLLECTION DB LOGIC ---
         function loadData() {
-            db.collection('users').doc(currentUser.uid).onSnapshot(doc => {
-                if (doc.exists) { 
+            db.collection('users').doc(currentUser.uid).get().then(doc => {
+                if (doc.exists) {
                     const raw = doc.data();
                     appData.startDate = raw.startDate || "2026-01-01";
                     appData.budgetRules = raw.budgetRules || [{ effectiveDate: "2026-01-01", amount: 540.66 }];
                     appData.fixedItems = raw.fixedItems || [];
                     appData.netWorth = raw.netWorth || { current: { assets:[], liabilities:[] }, history: [] };
-                    refreshUI(false); 
+                    refreshUI(false);
                 } else { saveConfig(); }
             });
 
-            db.collection('users').doc(currentUser.uid).collection('transactions').onSnapshot(snap => {
+            if (unsubTransactions) unsubTransactions();
+            unsubTransactions = db.collection('users').doc(currentUser.uid).collection('transactions').onSnapshot(snap => {
                 appData.transactions = snap.docs.map(doc => doc.data());
                 updateDescAutocomplete();
                 refreshUI(false);
             });
         }
 
-        function saveConfig() { 
+        function saveConfig() {
             const config = { startDate: appData.startDate, budgetRules: appData.budgetRules, fixedItems: appData.fixedItems, netWorth: appData.netWorth };
-            db.collection('users').doc(currentUser.uid).set(config, { merge: true }); 
+            db.collection('users').doc(currentUser.uid).set(config, { merge: true }).catch(err => {
+                console.error('Save failed:', err);
+                alert('Failed to save — check your connection and try again.');
+            });
         }
 
         function updateDescAutocomplete() {
@@ -695,7 +699,7 @@
         function changeChartMonth(o) { chartDate.setMonth(chartDate.getMonth()+o); renderSpendingChart(); }
         function changeAnnualYear(o) { annualChartDate.setFullYear(annualChartDate.getFullYear()+o); renderAnnualChart(); }
         function updateStartDate() { appData.startDate = document.getElementById('settingStartDate').value; saveConfig(); refreshUI(true); }
-        function addBudgetRule() { const date = document.getElementById('ruleDateInput').value, amount = parseFloat(document.getElementById('ruleAmountInput').value); if(!date || isNaN(amount)) return; appData.budgetRules.push({effectiveDate:date, amount}); saveConfig(); document.getElementById('ruleAmountInput').value = ''; refreshUI(true); }
+        function addBudgetRule() { const date = document.getElementById('ruleDateInput').value, amount = parseFloat(document.getElementById('ruleAmountInput').value); if(!date || isNaN(amount)) return; appData.budgetRules = appData.budgetRules.filter(r => r.effectiveDate !== date); appData.budgetRules.push({effectiveDate:date, amount}); saveConfig(); document.getElementById('ruleAmountInput').value = ''; refreshUI(true); }
         function sortList(type, criteria) { const targets = appData.fixedItems.filter(i=>i.type===type); const others = appData.fixedItems.filter(i=>i.type!==type); targets.sort((a,b) => criteria==='alpha' ? a.name.localeCompare(b.name) : b.amount-a.amount); appData.fixedItems = type==='income' ? [...targets, ...others] : [...others, ...targets]; saveConfig(); refreshUI(true); }
         function jumpToDate(val) { viewDate = new Date(val); refreshUI(true); }
 
