@@ -282,7 +282,7 @@
         const db = firebase.firestore(), auth = firebase.auth(), provider = new firebase.auth.GoogleAuthProvider();
 
         let currentUser = null, appData = { transactions: [], startDate: "2026-01-01", budgetRules: [{ effectiveDate: "2026-01-01", amount: 540.66 }], fixedItems: [], netWorth: { current: { assets:[], liabilities:[] }, history: [] } };
-        let viewDate = new Date(), chartDate = new Date(), annualChartDate = new Date(), chartInst = null, annualInst = null, nwInst = null, selectedSnapshotIdx = null, pendingAction = null, unsubTransactions = null;
+        let viewDate = new Date(), chartDate = new Date(), annualChartDate = new Date(), chartInst = null, annualInst = null, nwInst = null, selectedSnapshotIdx = null, pendingAction = null, unsubTransactions = null, configLoaded = false;
 
         const categories = [
             {name: "Groceries", icon: "🛒", color: "#3B82F6"}, {name: "Dining", icon: "🍔", color: "#60A5FA"}, {name: "Coffee", icon: "☕", color: "#93C5FD"},
@@ -312,16 +312,30 @@
 
         // --- SUBCOLLECTION DB LOGIC ---
         function loadData() {
-            db.collection('users').doc(currentUser.uid).get().then(doc => {
-                if (doc.exists) {
-                    const raw = doc.data();
-                    appData.startDate = raw.startDate || "2026-01-01";
-                    appData.budgetRules = raw.budgetRules || [{ effectiveDate: "2026-01-01", amount: 540.66 }];
-                    appData.fixedItems = raw.fixedItems || [];
-                    appData.netWorth = raw.netWorth || { current: { assets:[], liabilities:[] }, history: [] };
-                    refreshUI(false);
-                } else { saveConfig(); }
-            });
+            if (!configLoaded) {
+                configLoaded = true;
+                db.collection('users').doc(currentUser.uid).get({ source: 'server' }).then(doc => {
+                    if (doc.exists) {
+                        const raw = doc.data();
+                        appData.startDate = raw.startDate || "2026-01-01";
+                        appData.budgetRules = raw.budgetRules || [{ effectiveDate: "2026-01-01", amount: 540.66 }];
+                        appData.fixedItems = raw.fixedItems || [];
+                        appData.netWorth = raw.netWorth || { current: { assets:[], liabilities:[] }, history: [] };
+                        refreshUI(false);
+                    } else { saveConfig(); }
+                }).catch(() => {
+                    db.collection('users').doc(currentUser.uid).get().then(doc => {
+                        if (doc.exists) {
+                            const raw = doc.data();
+                            appData.startDate = raw.startDate || "2026-01-01";
+                            appData.budgetRules = raw.budgetRules || [{ effectiveDate: "2026-01-01", amount: 540.66 }];
+                            appData.fixedItems = raw.fixedItems || [];
+                            appData.netWorth = raw.netWorth || { current: { assets:[], liabilities:[] }, history: [] };
+                            refreshUI(false);
+                        } else { saveConfig(); }
+                    });
+                });
+            }
 
             if (unsubTransactions) unsubTransactions();
             unsubTransactions = db.collection('users').doc(currentUser.uid).collection('transactions').onSnapshot(snap => {
@@ -331,13 +345,19 @@
             });
         }
 
+        let savePending = false;
         function saveConfig() {
             const config = { startDate: appData.startDate, budgetRules: appData.budgetRules, fixedItems: appData.fixedItems, netWorth: appData.netWorth };
-            db.collection('users').doc(currentUser.uid).set(config, { merge: true }).catch(err => {
+            savePending = true;
+            db.collection('users').doc(currentUser.uid).set(config, { merge: true }).then(() => {
+                savePending = false;
+            }).catch(err => {
+                savePending = false;
                 console.error('Save failed:', err);
                 alert('Failed to save — check your connection and try again.');
             });
         }
+        window.addEventListener('beforeunload', e => { if (savePending) { e.preventDefault(); e.returnValue = ''; } });
 
         function updateDescAutocomplete() {
             const uniqueDescs = [...new Set(appData.transactions.map(t => t.desc))];
