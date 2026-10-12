@@ -314,7 +314,7 @@
         });
 
         function resetDateInputs() { const today = new Date(); document.getElementById('addDateInput').valueAsDate = today; document.getElementById('nwSnapshotDate').valueAsDate = today; document.getElementById('ruleDateInput').valueAsDate = today; }
-        function loginWithGoogle() { auth.signInWithPopup(provider); }
+        function loginWithGoogle() { auth.signInWithRedirect(provider); }
         function logout() { auth.signOut(); location.reload(); }
 
         // --- SUBCOLLECTION DB LOGIC ---
