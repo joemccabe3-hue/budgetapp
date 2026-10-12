@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Budget V54</title>
+    <title>Budget V55</title>
     
     <link rel="manifest" href="data:application/manifest+json;base64,CnsKICAgICJuYW1lIjogIk15IENsb3VkIEJ1ZGdldCIsCiAgICAic2hvcnRfbmFtZSI6ICJCdWRnZXQiLAogICAgInN0YXJ0X3VybCI6ICIuIiwKICAgICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICAgImJhY2tncm91bmRfY29sb3IiOiAiI0ZGRkZGRiIsCiAgICAidGhlbWVfY29sb3IiOiAiIzFCMjYzQiIsCiAgICAiaWNvbnMiOiBbCiAgICAgICAgewogICAgICAgICAgICAic3JjIjogImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQsUEhOMlp5QjRiV3h1Y3owaWFIUjBjRG92TDNkM2R5NTNNeTV2Y21jdk1qQXdNQzl6ZG1jaUlIWnBaWGRDYjNnOUlqQWdNQ0ExTVRJZ05URXlJaUIzYVdSMGFEMGlOVEV5SWlCb1pXbG5hSFE5SWpVeE1pSStQSEpsWTNRZ2QybGtkR2c5SWpVeE1pSWdhR1ZwWjJoMFBTSTFNVElpSUdacGJHdzlJaU14UWpJMk0wSWlMejQ4ZEdWNGRDQjRQU0kxTUNVaUlIazlJalV3SlNJZ1pHOXRhVzVoYm5RdFltRnpaV3hwYm1VOUltTmxiblJ5WVd3aUlIUmxlSFF0WVc1amFHOXlQU0p0YVdSa2JHVWlJR1pwYkd3OUlpTXlNVVkxUmtZaUlHWnZiblF0YzJsNlpUMGlNelV3Y0hnaUlHWnZiblF0Wm1GdGFXeDVQU0p6WVc1ekxYTmxjbWxtSWlCbWIyNTBMWGRsYVdkb2REMGlZbTlzWkNJK0pEd3ZkR1Y0ZEQ0OEwzTjJaejQ9IiwKICAgICAgICAgICAgInNpemVzIjogIjUxMng1MTIiLAogICAgICAgICAgICAidHlwZSI6ICJpbWFnZS9zdmcreG1sIgogICAgICAgIH0KICAgIF0KfQo=">
     <meta name="theme-color" content="#1B263B">
@@ -297,7 +297,7 @@
         const db = firebase.firestore(), auth = firebase.auth(), provider = new firebase.auth.GoogleAuthProvider();
 
         let currentUser = null, appData = { transactions: [], startDate: "2026-01-01", budgetRules: [{ effectiveDate: "2026-01-01", amount: 540.66 }], fixedItems: [], netWorth: { current: { assets:[], liabilities:[] }, history: [] } };
-        let viewDate = new Date(), chartDate = new Date(), annualChartDate = new Date(), chartInst = null, annualInst = null, nwInst = null, selectedSnapshotIdx = null, pendingAction = null, _pendingAnimate = false;
+        let viewDate = new Date(), chartDate = new Date(), annualChartDate = new Date(), chartInst = null, annualInst = null, nwInst = null, selectedSnapshotIdx = null, pendingAction = null, _pendingAnimate = false, configLoaded = false;
 
         const categories = [
             {name: "Groceries", icon: "🛒", color: "#3B82F6"}, {name: "Dining", icon: "🍔", color: "#60A5FA"}, {name: "Coffee", icon: "☕", color: "#93C5FD"},
@@ -368,16 +368,30 @@
 
         // --- SUBCOLLECTION DB LOGIC ---
         function loadData() {
-            db.collection('users').doc(currentUser.uid).onSnapshot(doc => {
-                if (doc.exists) { 
-                    const raw = doc.data();
-                    appData.startDate = raw.startDate || "2026-01-01";
-                    appData.budgetRules = raw.budgetRules || [{ effectiveDate: "2026-01-01", amount: 540.66 }];
-                    appData.fixedItems = raw.fixedItems || [];
-                    appData.netWorth = raw.netWorth || { current: { assets:[], liabilities:[] }, history: [] };
-                    refreshUI(false); 
-                } else { saveConfig(); }
-            });
+            if (!configLoaded) {
+                configLoaded = true;
+                db.collection('users').doc(currentUser.uid).get({ source: 'server' }).then(doc => {
+                    if (doc.exists) {
+                        const raw = doc.data();
+                        appData.startDate = raw.startDate || "2026-01-01";
+                        appData.budgetRules = raw.budgetRules || [{ effectiveDate: "2026-01-01", amount: 540.66 }];
+                        appData.fixedItems = raw.fixedItems || [];
+                        appData.netWorth = raw.netWorth || { current: { assets:[], liabilities:[] }, history: [] };
+                        refreshUI(false);
+                    } else { saveConfig(); }
+                }).catch(() => {
+                    db.collection('users').doc(currentUser.uid).get().then(doc => {
+                        if (doc.exists) {
+                            const raw = doc.data();
+                            appData.startDate = raw.startDate || "2026-01-01";
+                            appData.budgetRules = raw.budgetRules || [{ effectiveDate: "2026-01-01", amount: 540.66 }];
+                            appData.fixedItems = raw.fixedItems || [];
+                            appData.netWorth = raw.netWorth || { current: { assets:[], liabilities:[] }, history: [] };
+                            refreshUI(false);
+                        } else { saveConfig(); }
+                    });
+                });
+            }
 
             db.collection('users').doc(currentUser.uid).collection('transactions').onSnapshot(snap => {
                 // Guard: never overwrite real in-memory data with a stale empty cache result
@@ -389,9 +403,17 @@
             });
         }
 
-        function saveConfig() { 
+        let savePending = false;
+        function saveConfig() {
             const config = { startDate: appData.startDate, budgetRules: appData.budgetRules, fixedItems: appData.fixedItems, netWorth: appData.netWorth };
-            db.collection('users').doc(currentUser.uid).set(config, { merge: true }); 
+            savePending = true;
+            db.collection('users').doc(currentUser.uid).set(config, { merge: true }).then(() => {
+                savePending = false;
+            }).catch(err => {
+                savePending = false;
+                console.error('Save failed:', err);
+                alert('Failed to save — check your connection and try again.');
+            }); 
         }
 
         function updateDescAutocomplete() {
@@ -763,7 +785,7 @@
         function changeChartMonth(o) { chartDate.setMonth(chartDate.getMonth()+o); renderSpendingChart(); }
         function changeAnnualYear(o) { annualChartDate.setFullYear(annualChartDate.getFullYear()+o); renderAnnualChart(); }
         function updateStartDate() { appData.startDate = document.getElementById('settingStartDate').value; saveConfig(); refreshUI(true); }
-        function addBudgetRule() { const date = document.getElementById('ruleDateInput').value, amount = parseFloat(document.getElementById('ruleAmountInput').value); if(!date || isNaN(amount)) return; appData.budgetRules.push({effectiveDate:date, amount}); saveConfig(); document.getElementById('ruleAmountInput').value = ''; refreshUI(true); }
+        function addBudgetRule() { const date = document.getElementById('ruleDateInput').value, amount = parseFloat(document.getElementById('ruleAmountInput').value); if(!date || isNaN(amount)) return; appData.budgetRules = appData.budgetRules.filter(r => r.effectiveDate !== date); appData.budgetRules.push({effectiveDate:date, amount}); saveConfig(); document.getElementById('ruleAmountInput').value = ''; refreshUI(true); }
         function sortList(type, criteria) { const targets = appData.fixedItems.filter(i=>i.type===type); const others = appData.fixedItems.filter(i=>i.type!==type); targets.sort((a,b) => criteria==='alpha' ? a.name.localeCompare(b.name) : b.amount-a.amount); appData.fixedItems = type==='income' ? [...targets, ...others] : [...others, ...targets]; saveConfig(); refreshUI(true); }
         function jumpToDate(val) { viewDate = new Date(val+"T12:00:00"); renderTrackerTab(); }
 
