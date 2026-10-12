@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Budget V54</title>
-    
+    <title>Budget V55</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
     <link rel="manifest" href="data:application/manifest+json;base64,CnsKICAgICJuYW1lIjogIk15IENsb3VkIEJ1ZGdldCIsCiAgICAic2hvcnRfbmFtZSI6ICJCdWRnZXQiLAogICAgInN0YXJ0X3VybCI6ICIuIiwKICAgICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICAgImJhY2tncm91bmRfY29sb3IiOiAiI0ZGRkZGRiIsCiAgICAidGhlbWVfY29sb3IiOiAiIzFCMjYzQiIsCiAgICAiaWNvbnMiOiBbCiAgICAgICAgewogICAgICAgICAgICAic3JjIjogImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQsUEhOMlp5QjRiV3h1Y3owaWFIUjBjRG92TDNkM2R5NTNNeTV2Y21jdk1qQXdNQzl6ZG1jaUlIWnBaWGRDYjNnOUlqQWdNQ0ExTVRJZ05URXlJaUIzYVdSMGFEMGlOVEV5SWlCb1pXbG5hSFE5SWpVeE1pSStQSEpsWTNRZ2QybGtkR2c5SWpVeE1pSWdhR1ZwWjJoMFBTSTFNVElpSUdacGJHdzlJaU14UWpJMk0wSWlMejQ4ZEdWNGRDQjRQU0kxTUNVaUlIazlJalV3SlNJZ1pHOXRhVzVoYm5RdFltRnpaV3hwYm1VOUltTmxiblJ5WVd3aUlIUmxlSFF0WVc1amFHOXlQU0p0YVdSa2JHVWlJR1pwYkd3OUlpTXlNVVkxUmtZaUlHWnZiblF0YzJsNlpUMGlNelV3Y0hnaUlHWnZiblF0Wm1GdGFXeDVQU0p6WVc1ekxYTmxjbWxtSWlCbWIyNTBMWGRsYVdkb2REMGlZbTlzWkNJK0pEd3ZkR1Y0ZEQ0OEwzTjJaejQ9IiwKICAgICAgICAgICAgInNpemVzIjogIjUxMng1MTIiLAogICAgICAgICAgICAidHlwZSI6ICJpbWFnZS9zdmcreG1sIgogICAgICAgIH0KICAgIF0KfQo=">
     <meta name="theme-color" content="#1B263B">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -95,6 +98,7 @@
         <h1 style="color:white; margin-bottom:10px;">My Budget</h1>
         <div class="loader" id="loginLoader"></div>
         <button class="login-btn" onclick="loginWithGoogle()">Sign in with Google</button>
+        <div style="position:absolute;bottom:20px;color:rgba(255,255,255,0.3);font-size:11px;">V55</div>
     </div>
 
     <div id="app-content">
@@ -268,6 +272,9 @@
     <div id="nwItemModal" class="modal"><div class="modal-content"><h3 id="nwItemTitle" style="color:var(--primary);">Add Item</h3><input type="hidden" id="nwItemType"><input type="hidden" id="fixedEditIndex"><input type="text" id="nwItemName" placeholder="Name"><input type="number" id="nwItemAmount" placeholder="Amount"><button class="primary-btn" onclick="saveNwItem()" style="margin-bottom:0;">Save</button><button id="btnDeleteNwItem" onclick="confirmAction('deleteNWItem')" style="color:var(--red); border:none; background:none; width:100%; display:none; margin-top:15px; font-weight:bold;">Delete</button><button onclick="document.getElementById('nwItemModal').style.display='none'" style="color:var(--text-secondary); border:none; background:none; width:100%; margin-top:10px;">Cancel</button></div></div>
 
 <script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.getRegistrations().then(r => r.forEach(sw => sw.unregister())); }
+    if ('caches' in window) { caches.keys().then(k => k.forEach(c => caches.delete(c))); }
+
     const firebaseConfig = {
       apiKey: "AIzaSyCW2sAPkXYJv8zqkB92RLhY9CY6d2awK4M",
       authDomain: "monthly-budget-8f827.firebaseapp.com",
